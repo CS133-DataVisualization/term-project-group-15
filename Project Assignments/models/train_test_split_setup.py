@@ -17,17 +17,49 @@ LEAKAGE_PRONE_COLUMNS = [
     "is_free",
 ]
 
+RELEASE_YEAR_COL = "release_year"
+GENRE_COLUMNS = (
+    "Action",
+    "Adventure",
+    "Casual",
+    "Free to Play",
+    "Indie",
+    "Massively Multiplayer",
+    "Other",
+    "RPG",
+    "Racing",
+    "Simulation",
+    "Sports",
+    "Strategy",
+    "Unknown",
+)
+
 
 def build_feature_matrix(df: pd.DataFrame, target_columns: list[str]) -> pd.DataFrame:
     """Create a numeric-only feature matrix from the dataset."""
     feature_df = df.drop(columns=target_columns, errors="ignore").copy()
+    feature_df = feature_df.drop(columns=["name"], errors="ignore")
+
+    required_context = (RELEASE_YEAR_COL, *GENRE_COLUMNS)
+    missing = [c for c in required_context if c not in feature_df.columns]
+    if missing:
+        raise ValueError(
+            "Dataset is missing release year or genre columns expected in splits: "
+            f"{missing}"
+        )
+
+    for col in required_context:
+        feature_df[col] = pd.to_numeric(feature_df[col], errors="coerce")
+
     feature_df = feature_df.select_dtypes(include=[np.number, "bool"]).copy()
 
     bool_cols = feature_df.select_dtypes(include=["bool"]).columns
     for col in bool_cols:
         feature_df[col] = feature_df[col].astype(int)
 
-    return feature_df
+    context_set = set(required_context)
+    rest = sorted(c for c in feature_df.columns if c not in context_set)
+    return feature_df.loc[:, rest + list(required_context)]
 
 
 def build_targets(df: pd.DataFrame, threshold: float = PREMIUM_THRESHOLD) -> tuple[pd.Series, pd.Series]:
